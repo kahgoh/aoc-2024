@@ -1,5 +1,4 @@
-(ns puzzle)
-
+(ns part2)
 (require '[clojure.java.io :as io])
 
 (defrecord Reindeer [from-point current-point head score])
@@ -20,7 +19,7 @@
         to-head-idx (find-index directions to-head)
         diff (abs (- from-head-idx to-head-idx))]
     (if
-     ;; Condition checks for turn from west to north or vice versa
+       ;; Turn from west to north or vice versa
      (= (sort [from-head-idx to-head-idx]) [0 3])
       1000
       (* diff 1000))))
@@ -60,37 +59,44 @@
 (defn add-possibilities [maze-map {from :from-point current :current-point :as from-reindeer} acc]
   (let [possible-moves (get-adjacent-spaces maze-map from current)
         next-moves (map #(add-move from-reindeer %) possible-moves)]
-    ;; acc converted to vector to ensure new possibilities are added to the end of the queue
     (into (vec acc) next-moves)))
 
 (defn move-reindeer [maze-map start-point start-head end-point]
-  (loop [[next-reindeer & rem-reindeers] [(Reindeer. start-point start-point start-head 0)]
+  (loop [[next-point & other-points] [(Reindeer. start-point start-point start-head 0)]
          seen {}]
-    (let [{from-point :from-point current-point :current-point score :score} next-reindeer
+    (let [{from-point :from-point current-point :current-point score :score} next-point
           exist-crumb (get seen current-point)
           {end-score :score} (get seen end-point)]
-      (cond 
-        (nil? next-reindeer) seen
+      (cond
+        (nil? next-point) seen
 
-        ;; We have a candidate score and current score is greater. Skip the node.
-        (and (not (nil? end-score)) (< end-score score)) (recur rem-reindeers seen)
+           ;; We have a candidate score and current score is greater. Skip the node.
+        (and (not (nil? end-score)) (< end-score score)) (recur other-points seen)
 
-        ;; Haven't seen point before
-        (nil? exist-crumb) (recur (add-possibilities maze-map next-reindeer rem-reindeers) (assoc seen current-point (Crumb. from-point score)))
+           ;; Haven't seen point before
+        (nil? exist-crumb) (recur (add-possibilities maze-map next-point other-points) (assoc seen current-point (Crumb. from-point score)))
 
         :else (if (> (.score exist-crumb) score)
-                ;; Score is better
-                (recur (add-possibilities maze-map next-reindeer rem-reindeers) (assoc seen current-point (Crumb. from-point score)))
+                   ;; Score is better
+                (recur (add-possibilities maze-map next-point other-points) (assoc seen current-point (Crumb. from-point score)))
 
-                ;; Score is no better than current point
-                (recur rem-reindeers seen))))))
+                   ;; Score is no better than current point
+                (recur other-points seen))))))
 
-(defn solve1 [input-file]
-  (let [maze-map (read-maze input-file)
-        start-point (find-point maze-map \S)
-        end-point (find-point maze-map \E)
-        moves (move-reindeer maze-map start-point :east end-point)]
-    (get moves end-point)))
+(let [maze-map (read-maze "input")
+      start-point (find-point maze-map \S)
+      end-point (find-point maze-map \E)
+      forwards-moves (move-reindeer maze-map start-point :east end-point)
+      backwards-moves (move-reindeer maze-map end-point :south start-point)
+      req-score (get-in forwards-moves [end-point :score])]
+  (loop [[candidate-point & rem-points] (keys forwards-moves)
+         tile-count 0]
 
-;; (solve1 "sample")
-(solve1 "input")
+    (if (nil? candidate-point)
+      tile-count
+      (let [f-crumb (get forwards-moves candidate-point)
+            b-crumb (get backwards-moves candidate-point)]
+        (cond
+          (or (nil? f-crumb) (nil? b-crumb)) (recur rem-points tile-count)
+          (>= req-score (+ (.score f-crumb) (.score b-crumb))) (recur rem-points (inc tile-count))
+          :else (recur rem-points tile-count))))))
